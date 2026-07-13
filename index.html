@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Travel Bill Summary Generator</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    
     <style>
         :root {
             --primary-color: #1e3a8a;
@@ -87,10 +89,6 @@
             transition: border-color 0.2s;
         }
 
-        .input-group input:focus {
-            border-color: var(--secondary-color);
-        }
-
         .table-responsive {
             overflow-x: auto;
             margin-bottom: 20px;
@@ -129,10 +127,6 @@
             border-radius: 4px;
             font-size: 14px;
             outline: none;
-        }
-
-        input.table-input:focus {
-            border-color: var(--secondary-color);
         }
 
         .text-right {
@@ -187,10 +181,6 @@
             padding: 4px 8px;
         }
 
-        .btn-danger:hover {
-            background-color: #fee2e2;
-        }
-
         .action-actions {
             display: flex;
             gap: 10px;
@@ -241,80 +231,22 @@
             padding-top: 12px;
         }
 
-        /* Print Styles Optimized for A4 Portrait */
-        @media print {
-            body {
-                background-color: white;
-                color: black;
-                padding: 0;
-            }
-
-            .container {
-                box-shadow: none;
-                padding: 0;
-                max-width: 100%;
-            }
-
-            .no-print {
-                display: none !important;
-            }
-
-            .meta-grid {
-                background: #f8fafc !important;
-                border-left: 5px solid #1e3a8a !important;
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-            }
-
-            th {
-                background-color: #1e3a8a !important;
-                color: white !important;
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-            }
-
-            tr:nth-child(even) td {
-                background-color: #f8fafc !important;
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-            }
-
-            .summary-section {
-                background: #f8fafc !important;
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-            }
-
-            input {
-                border: none !important;
-                background: transparent !important;
-                padding: 0 !important;
-                font-size: 14px !important;
-            }
-            
-            input::placeholder {
-                color: transparent !important;
-            }
-            
-            input::-webkit-outer-spin-button,
-            input::-webkit-inner-spin-button {
-                -webkit-appearance: none;
-                margin: 0;
-            }
-
-            @page {
-                size: A4 portrait;
-                margin: 15mm 10mm;
-            }
+        /* Styling adjustments during PDF rendering to look clean without input borders */
+        .pdf-mode input {
+            border: none !important;
+            background: transparent !important;
+            padding: 0 !important;
+        }
+        .pdf-mode .no-print {
+            display: none !important;
         }
     </style>
 </head>
 <body>
 
-<div class="container">
+<div class="container" id="billContainer">
     <div class="header-title">Travel Bill Summary</div>
 
-    <!-- Metadata Fields -->
     <div class="meta-grid">
         <div class="input-group">
             <label>Month</label>
@@ -330,12 +262,10 @@
         </div>
     </div>
 
-    <!-- Actions -->
     <div class="action-actions no-print">
         <button class="btn btn-primary" onclick="addRow()">+ Add New Row</button>
     </div>
 
-    <!-- Dynamic Table -->
     <div class="table-responsive">
         <table id="billTable">
             <thead>
@@ -348,7 +278,6 @@
                 </tr>
             </thead>
             <tbody id="tableBody">
-                <!-- Pre-populated Row 1 -->
                 <tr>
                     <td><input type="text" class="table-input core-row" value="KM Run" readonly></td>
                     <td><input type="number" class="table-input text-right rate-input" value="" placeholder="0" oninput="calculateRow(this)"></td>
@@ -356,7 +285,6 @@
                     <td class="text-right amount-col">0.00</td>
                     <td class="no-print"></td>
                 </tr>
-                <!-- Pre-populated Row 2 -->
                 <tr>
                     <td><input type="text" class="table-input core-row" value="Package" readonly></td>
                     <td><input type="number" class="table-input text-right rate-input" value="" placeholder="0" oninput="calculateRow(this)"></td>
@@ -364,7 +292,6 @@
                     <td class="text-right amount-col">0.00</td>
                     <td class="no-print"></td>
                 </tr>
-                <!-- Pre-populated Row 3 -->
                 <tr>
                     <td><input type="text" class="table-input core-row" value="Toll" readonly></td>
                     <td><input type="number" class="table-input text-right rate-input" value="" placeholder="0" oninput="calculateRow(this)"></td>
@@ -376,7 +303,6 @@
         </table>
     </div>
 
-    <!-- Summary / Total Calculations -->
     <div class="summary-section">
         <div class="summary-row total">
             <span>Total Amount:</span>
@@ -392,9 +318,8 @@
         </div>
     </div>
 
-    <!-- Download PDF Button -->
-    <button class="btn btn-success no-print" onclick="window.print()">
-        Download / Print PDF
+    <button class="btn btn-success no-print" onclick="downloadPDF()">
+        Download PDF
     </button>
 </div>
 
@@ -448,6 +373,29 @@
         
         document.getElementById('totalAmount').textContent = '₹ ' + total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         document.getElementById('balanceOutstanding').textContent = '₹ ' + balance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    // Direct PDF Generation Logic
+    function downloadPDF() {
+        const element = document.getElementById('billContainer');
+        const monthValue = document.getElementById('billMonth').value || 'Travel_Bill';
+        
+        // Temporarily clean UI for crisp PDF view
+        element.classList.add('pdf-mode');
+
+        const opt = {
+            margin:       [15, 12, 15, 12], // Top, Left, Bottom, Right spacing
+            filename:     `${monthValue.replace(/\s+/g, '_')}_Summary.pdf`,
+            image:        { type: 'jpeg', quality: 0.98 },
+            html2canvas:  { scale: 2, useCORS: true },
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
+
+        // Execute background conversion and download
+        html2pdf().set(opt).from(element).save().then(() => {
+            // Restore normal view with active inputs back on screen
+            element.classList.remove('pdf-mode');
+        });
     }
 </script>
 </body>
