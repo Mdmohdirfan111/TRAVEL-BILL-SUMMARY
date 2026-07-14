@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Travel Bill Summary Generator</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
@@ -241,15 +242,6 @@
             flex-wrap: wrap;
         }
 
-        .notes-group {
-            margin-bottom: 20px;
-        }
-        .notes-group textarea {
-            width: 100%;
-            min-height: 54px;
-            resize: vertical;
-        }
-
         .summary-section {
             margin-top: 6px;
             background: #f8fafc;
@@ -320,6 +312,29 @@
             .container { padding: 22px 16px 18px; }
             .header-title { font-size: 21px; }
         }
+
+        /* Applied only while the PDF snapshot is being taken */
+        .pdf-mode {
+            box-shadow: none !important;
+            border-radius: 0 !important;
+        }
+        .pdf-mode input,
+        .pdf-mode textarea {
+            border: none !important;
+            background: transparent !important;
+            padding: 0 !important;
+            box-shadow: none !important;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+        .pdf-mode input[type="number"]::-webkit-inner-spin-button,
+        .pdf-mode input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        .pdf-mode .no-print {
+            display: none !important;
+        }
     </style>
 </head>
 <body>
@@ -387,11 +402,6 @@
         </table>
     </div>
 
-    <div class="notes-group input-group">
-        <label>Notes (optional)</label>
-        <textarea id="billNotes" placeholder="Any additional remarks..."></textarea>
-    </div>
-
     <div class="summary-section">
         <div class="summary-row total">
             <span>Total Amount:</span>
@@ -410,7 +420,7 @@
     <div class="footer-note">Built by <span>Mohd Irfan</span></div>
 </div>
 
-<button class="btn btn-success no-print" style="max-width:800px;width:100%;margin-top:16px;" onclick="downloadPDF()">
+<button class="btn btn-success no-print" id="downloadBtn" style="max-width:800px;width:100%;margin-top:16px;" onclick="downloadPDF()">
     Download PDF
 </button>
 </div>
@@ -457,7 +467,6 @@
         document.getElementById('billMonth').value = '';
         document.getElementById('billLocation').value = '';
         document.getElementById('billVehicle').value = '';
-        document.getElementById('billNotes').value = '';
         document.getElementById('advanceInput').value = '';
         document.querySelectorAll('.rate-input, .qty-input').forEach(i => i.value = '');
         document.querySelectorAll('.amount-col').forEach(c => c.textContent = '0.00');
@@ -483,69 +492,62 @@
     }
 
     // Direct PDF Generation Logic
-    // Builds a clean, print-only clone of the bill (inputs converted to plain text)
-    // so nothing gets cut off, misaligned, or dropped by the canvas renderer.
-    function downloadPDF() {
-        const original = document.getElementById('billContainer');
+    // Captures the bill exactly as shown on screen, then scales the resulting
+    // image down (if needed) so the entire bill always fits on ONE A4 page,
+    // instead of letting it get sliced across multiple pages.
+    async function downloadPDF() {
+        const container = document.getElementById('billContainer');
         const monthValue = document.getElementById('billMonth').value || 'Travel_Bill';
+        const downloadBtn = document.getElementById('downloadBtn');
 
-        const clone = original.cloneNode(true);
-        clone.classList.add('pdf-mode');
-        clone.removeAttribute('id');
-        clone.style.boxShadow = 'none';
-        clone.style.borderRadius = '0';
-        clone.style.width = '720px';
+        downloadBtn.disabled = true;
+        downloadBtn.textContent = 'Generating PDF...';
 
-        // Replace every input/textarea in the clone with static text so the
-        // rendered value is always shown correctly and nothing overflows.
-        clone.querySelectorAll('input, textarea').forEach(field => {
-            const span = document.createElement(field.tagName === 'TEXTAREA' ? 'div' : 'span');
-            const val = field.value || '';
-            span.textContent = val;
-            span.style.fontSize = '14px';
-            span.style.fontWeight = field.closest('.summary-row.advance') ? '600' : '400';
-            if (field.classList.contains('text-right')) span.style.textAlign = 'right';
-            if (field.classList.contains('text-center')) span.style.textAlign = 'center';
-            span.style.display = field.tagName === 'TEXTAREA' ? 'block' : 'inline-block';
-            span.style.width = '100%';
-            span.style.color = '#1e293b';
-            field.replaceWith(span);
-        });
+        // Switch to clean, borderless "print" styling for the snapshot
+        container.classList.add('pdf-mode');
 
-        // Remove no-print elements (delete-row buttons, blank action column, etc.)
-        clone.querySelectorAll('.no-print').forEach(el => el.remove());
+        // Let the browser repaint with the new styles before capturing
+        await new Promise(resolve => setTimeout(resolve, 50));
 
-        // Hide notes block entirely if left empty
-        const notesBlock = clone.querySelector('.notes-group');
-        if (notesBlock) {
-            const notesText = notesBlock.querySelector('div');
-            if (!notesText || !notesText.textContent.trim()) {
-                notesBlock.remove();
-            }
+        try {
+            const canvas = await html2canvas(container, {
+                scale: 2,
+                useCORS: true,
+                backgroundColor: '#ffffff'
+            });
+
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF('p', 'mm', 'a4');
+
+            const pageWidth = pdf.internal.pageSize.getWidth();
+            const pageHeight = pdf.internal.pageSize.getHeight();
+            const margin = 10;
+            const maxWidth = pageWidth - margin * 2;
+            const maxHeight = pageHeight - margin * 2;
+
+            // Convert canvas pixel size to mm at 96dpi, then scale to fit
+            const pxToMm = 25.4 / 96;
+            const imgWidthMm = canvas.width * pxToMm / 2;   // divide by html2canvas scale factor
+            const imgHeightMm = canvas.height * pxToMm / 2;
+
+            const scaleFactor = Math.min(maxWidth / imgWidthMm, maxHeight / imgHeightMm, 1);
+            const finalWidth = imgWidthMm * scaleFactor;
+            const finalHeight = imgHeightMm * scaleFactor;
+
+            const offsetX = (pageWidth - finalWidth) / 2;
+            const offsetY = margin;
+
+            const imgData = canvas.toDataURL('image/jpeg', 0.98);
+            pdf.addImage(imgData, 'JPEG', offsetX, offsetY, finalWidth, finalHeight);
+            pdf.save(`${monthValue.replace(/\s+/g, '_')}_Summary.pdf`);
+        } catch (err) {
+            alert('PDF generate karne mein dikkat aayi. Dobara try karein.');
+            console.error(err);
+        } finally {
+            container.classList.remove('pdf-mode');
+            downloadBtn.disabled = false;
+            downloadBtn.textContent = 'Download PDF';
         }
-
-        const wrapper = document.createElement('div');
-        wrapper.style.position = 'fixed';
-        wrapper.style.top = '-99999px';
-        wrapper.style.left = '-99999px';
-        wrapper.style.background = '#ffffff';
-        wrapper.appendChild(clone);
-        document.body.appendChild(wrapper);
-
-        const opt = {
-            margin:       [10, 10, 10, 10],
-            filename:     `${monthValue.replace(/\s+/g, '_')}_Summary.pdf`,
-            image:        { type: 'jpeg', quality: 0.98 },
-            html2canvas:  { scale: 2, useCORS: true, windowWidth: 780 },
-            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-            pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
-        };
-
-        html2pdf().set(opt).from(clone).save().then(() => {
-            document.body.removeChild(wrapper);
-        }).catch(() => {
-            document.body.removeChild(wrapper);
-        });
     }
 </script>
 </body>
