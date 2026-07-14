@@ -387,14 +387,14 @@
                 <tr>
                     <td><input type="text" class="table-input core-row" value="Package" readonly></td>
                     <td><input type="number" class="table-input text-right rate-input" value="" placeholder="0" oninput="calculateRow(this)"></td>
-                    <td><input type="number" class="table-input text-center qty-input" value="" placeholder="Optional" oninput="calculateRow(this)"></td>
+                    <td><input type="number" class="table-input text-center qty-input" value="" placeholder="" oninput="calculateRow(this)"></td>
                     <td class="text-right amount-col">0.00</td>
                     <td class="no-print"></td>
                 </tr>
                 <tr>
                     <td><input type="text" class="table-input core-row" value="Toll" readonly></td>
                     <td><input type="number" class="table-input text-right rate-input" value="" placeholder="0" oninput="calculateRow(this)"></td>
-                    <td><input type="number" class="table-input text-center qty-input" value="" placeholder="Optional" oninput="calculateRow(this)"></td>
+                    <td><input type="number" class="table-input text-center qty-input" value="" placeholder="" oninput="calculateRow(this)"></td>
                     <td class="text-right amount-col">0.00</td>
                     <td class="no-print"></td>
                 </tr>
@@ -449,7 +449,7 @@
         tr.innerHTML = `
             <td><input type="text" class="table-input" placeholder="Enter Description"></td>
             <td><input type="number" class="table-input text-right rate-input" value="" placeholder="0" oninput="calculateRow(this)"></td>
-            <td><input type="number" class="table-input text-center qty-input" value="" placeholder="Optional" oninput="calculateRow(this)"></td>
+            <td><input type="number" class="table-input text-center qty-input" value="" placeholder="" oninput="calculateRow(this)"></td>
             <td class="text-right amount-col">0.00</td>
             <td class="no-print text-center"><button class="btn btn-danger" onclick="deleteRow(this)">✕</button></td>
         `;
